@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken')
 
 // The greater the number, the harder the password is to crack
 const saltRounds = 10
-const testHash = "$2b$10$ELk3buSmKcoD/hczYeDSt.bkZ2U6aOEXTII0w3rH4rL5HcOVUjKDG"
+const testHash = "$2b$10$OtEH1tqzkbyS9BEyIYKkReISfglfIm1LoirYnKBg.2zFaWffLFYlG"
 
 // Lets us send json with express
 app.use(express.json())
@@ -29,6 +29,8 @@ app.post('/signup', (req, res) => {
         res.json({username, hash})
     })
 })
+
+let refreshTokens = []
 
 // Takes username and password, compares password to hash in db
 // serializes user into payload to sign jwt, returns token
@@ -53,7 +55,8 @@ app.post('/login', (req, res) => {
 
             // short-lived token to get more access tokens????
             const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET)
-
+            // store 
+            refreshTokens.push(refreshToken)
             return res.json({accessToken : accessToken, refreshToken : refreshToken})
         }
 
@@ -63,16 +66,38 @@ app.post('/login', (req, res) => {
     return comparePassword(user, password)
 })
 
+// passes back a fresh token to keep server alive
 app.post('/token', (req,res) => {
-    const refreshToken = req.body.accessToken
+    const refreshToken = req.body.token
 
     if (refreshToken === null) return res.sendStatus(401)
+
+    if(!refreshTokens.includes(refreshToken)) return res.sendStatus(403)
 
     jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
         if (err) return res.status(403).send('Failed to verify')
         const accessToken = generateAccessToken({name : user.name})
         res.json({accessToken : accessToken})
     })
+})
+
+posts = [
+    {
+        username: "Bob",
+        likes: 10
+    },
+    {
+        username: "John",
+        likes: 20
+    },
+    {
+        username: "Alex",
+        likes: 1000
+    }
+]
+
+app.get('/post', authenticateToken, (req, res) => {
+    res.json(posts.filter(post => post.username === req.user.name))
 })
 
 app.listen(8980, (error) => {
@@ -83,3 +108,23 @@ app.listen(8980, (error) => {
 function generateAccessToken(user) {
     return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn : '5m'})
 }
+
+app.delete('/logout', (req, res) => {
+    refreshTokens = refreshTokens.filter(token => token !== req.body.token)
+    res.sendStatus(204)
+})
+
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization']
+    const token = authHeader && authHeader.split(" ")[1]
+
+    if (token === null) return res.sendStatus(401)
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403)
+            req.user = user
+        next()
+    })
+}
+
+// refresh token : eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiQm9iIiwiaWF0IjoxNzc1MDg4MzEyfQ.KHapLIyKDRO2UlbffmjiCUFMy7FREdX_98s5NyVFgZo
