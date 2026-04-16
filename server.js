@@ -4,6 +4,7 @@ const express = require('express')
 const app = express()
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
+const {initializeDb} = require('./database/client')
 
 // The greater the number, the harder the password is to crack
 const saltRounds = 10
@@ -103,6 +104,7 @@ app.get('/post', authenticateToken, (req, res) => {
 app.listen(8980, (error) => {
     if (error) return console.log(`Server failed to start ${error}`)
     console.log("Server is listening")
+    initializeDb()
 })
 
 function generateAccessToken(user) {
